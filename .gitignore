@@ -1,0 +1,15 @@
+
+# Visual Studio
+.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Local SQLite database
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
