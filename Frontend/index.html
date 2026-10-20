@@ -1,15 +1,36 @@
 <!DOCTYPE html>
 <html lang="uk">
-
 <head>
   <meta charset="UTF-8">
   <title>ViloreHome — Практична 1</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f8f6f2; padding: 40px; max-width: 600px; margin: 0 auto; }
+    button { background: #8c6d58; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+    ul { list-style: none; padding: 0; margin-top: 20px; }
+    li { background: white; padding: 12px; margin-bottom: 8px; border-radius: 6px; display: flex; justify-content: space-between; }
+  </style>
 </head>
-
 <body>
+  <h1>ViloreHome 🕯️ (Практична 1)</h1>
+  <button id="loadBtn">Load items</button>
+  <ul id="itemsList"></ul>
+
   <script>
-    
+    document.getElementById('loadBtn').addEventListener('click', async () => {
+      try {
+        const response = await fetch('http://localhost:5000/items');
+        const items = await response.json();
+        const list = document.getElementById('itemsList');
+        list.innerHTML = '';
+        items.forEach(item => {
+          const li = document.createElement('li');
+          li.innerHTML = `<span><strong>${item.name}</strong> (${item.category || 'Декор'})</span> <span>${item.price || 0} грн</span>`;
+          list.appendChild(li);
+        });
+      } catch (err) {
+        alert('Помилка завантаження товарів');
+      }
+    });
   </script>
 </body>
-
 </html>
