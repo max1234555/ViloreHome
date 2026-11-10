@@ -18,7 +18,7 @@ export default function App() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:5000/items');
+      const response = await fetch('https://localhost:7060/api/items');
       
       if (!response.ok) {
         throw new Error(`Помилка сервера: ${response.status}`);
@@ -29,7 +29,7 @@ export default function App() {
       setHasLoaded(true);
     } catch (err) {
       console.error(err);
-      setError('Не вдалося завантажити товари з сервера. Перевірте, чи запущений бекенд на http://localhost:5000');
+      setError('Не вдалося завантажити товари з сервера. Перевірте, чи запущений бекенд на https://localhost:7060/api/items');
     } finally {
       setLoading(false);
     }
