@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Web_prog_server.Data;
 using Web_prog_server.Models;
+using Web_prog_server.Services.Items;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(
         builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddScoped<IItemService, ItemService>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
