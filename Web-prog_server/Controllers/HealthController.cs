@@ -7,5 +7,5 @@ namespace Web_prog_server.Controllers;
 public sealed class HealthController : ControllerBase
 {
     [HttpGet]
-    public IActionResult Get() => Ok("ok");
+    public IActionResult Get() => Ok(new { status = "ok" });
 }

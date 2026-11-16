@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Web_prog_server.Data;
 using Web_prog_server.Models;
@@ -7,10 +9,12 @@ namespace Web_prog_server.Services.Items;
 public sealed class ItemService : IItemService
 {
     private readonly AppDbContext _db;
+    private readonly ItemIdempotencyStore _idempotencyStore;
 
-    public ItemService(AppDbContext db)
+    public ItemService(AppDbContext db, ItemIdempotencyStore idempotencyStore)
     {
         _db = db;
+        _idempotencyStore = idempotencyStore;
     }
 
     public async Task<IReadOnlyList<ItemResponse>> GetAllAsync(
@@ -45,6 +49,58 @@ public sealed class ItemService : IItemService
             return ItemServiceResult<ItemResponse>.Failure(validationError);
         }
 
+        var item = await CreateItemAsync(request, cancellationToken);
+        return ItemServiceResult<ItemResponse>.Success(ToResponse(item));
+    }
+
+    public async Task<ItemServiceResult<ItemResponse>> CreateIdempotentAsync(
+        CreateItemRequest request,
+        string? idempotencyKey,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            return ItemServiceResult<ItemResponse>.Failure(
+                new ErrorResponse("ValidationError", "IDEMPOTENCY_KEY_REQUIRED",
+                    [new ErrorDetail("Idempotency-Key", "Idempotency-Key header is required.")]));
+        }
+
+        if (idempotencyKey.Length > 128 ||
+            idempotencyKey.Any(character => character is < (char)0x21 or > (char)0x7e))
+        {
+            return ItemServiceResult<ItemResponse>.Failure(
+                new ErrorResponse("ValidationError", "IDEMPOTENCY_KEY_INVALID",
+                    [new ErrorDetail("Idempotency-Key", "Idempotency-Key must be at most 128 printable characters.")]));
+        }
+
+        var validationError = Validate(request.Name, request.Category, request.Price);
+        if (validationError is not null)
+        {
+            return ItemServiceResult<ItemResponse>.Failure(validationError);
+        }
+
+        var normalizedRequest = request with
+        {
+            Name = request.Name!.Trim(),
+            Category = request.Category!.Trim()
+        };
+        var fingerprint = CreateFingerprint(normalizedRequest);
+        var idempotencyResult = await _idempotencyStore.ExecuteAsync(
+            idempotencyKey.Trim(),
+            fingerprint,
+            async () => ToResponse(await CreateItemAsync(normalizedRequest, cancellationToken)),
+            cancellationToken);
+
+        return idempotencyResult.IsConflict
+            ? ItemServiceResult<ItemResponse>.Failure(
+                new ErrorResponse("Conflict", "IDEMPOTENCY_KEY_REUSED",
+                    [new ErrorDetail("Idempotency-Key", "This key was already used with a different request.")]))
+            : ItemServiceResult<ItemResponse>.Success(idempotencyResult.Response!);
+    }
+
+    private async Task<Item> CreateItemAsync(
+        CreateItemRequest request, CancellationToken cancellationToken)
+    {
         var item = new Item
         {
             Name = request.Name!.Trim(),
@@ -54,8 +110,7 @@ public sealed class ItemService : IItemService
 
         _db.Items.Add(item);
         await _db.SaveChangesAsync(cancellationToken);
-
-        return ItemServiceResult<ItemResponse>.Success(ToResponse(item));
+        return item;
     }
 
     public async Task<ItemServiceResult<ItemResponse>> UpdateAsync(
@@ -130,4 +185,15 @@ public sealed class ItemService : IItemService
 
     private static ItemResponse ToResponse(Item item) =>
         new(item.Id, item.Name, item.Category, item.Price);
+
+    private static string CreateFingerprint(CreateItemRequest request)
+    {
+        var content = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            request.Name,
+            request.Category,
+            request.Price
+        });
+        return Convert.ToHexString(SHA256.HashData(content));
+    }
 }
