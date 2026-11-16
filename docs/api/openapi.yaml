@@ -1,0 +1,237 @@
+openapi: 3.0.3
+info:
+  title: ViloreHome Items API
+  version: 1.0.0
+  description: |
+    Контракт реалізованого API каталогу товарів ViloreHome.
+    Описує CRUD для Items і перевірку доступності застосунку.
+servers:
+  - url: /
+    description: Поточний сервер ASP.NET Core
+tags:
+  - name: Items
+    description: Операції з товарами каталогу
+  - name: Health
+    description: Перевірка доступності застосунку
+paths:
+  /api/items:
+    get:
+      tags: [Items]
+      summary: Отримати список товарів
+      operationId: getItems
+      responses:
+        '200':
+          description: Список товарів, упорядкований за ідентифікатором
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ItemResponse'
+    post:
+      tags: [Items]
+      summary: Створити товар
+      operationId: createItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateItemRequest'
+      responses:
+        '201':
+          description: Товар створено
+          headers:
+            Location:
+              description: Шлях до створеного товару
+              schema:
+                type: string
+              example: /api/items/1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+  /api/items/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Цілочисельний ідентифікатор товару
+        schema:
+          type: integer
+          format: int32
+    get:
+      tags: [Items]
+      summary: Отримати товар за ідентифікатором
+      operationId: getItemById
+      responses:
+        '200':
+          description: Товар знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      tags: [Items]
+      summary: Повністю оновити товар
+      description: Оновлює назву, категорію та ціну одночасно. PATCH не реалізовано.
+      operationId: updateItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateItemRequest'
+      responses:
+        '200':
+          description: Товар оновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    delete:
+      tags: [Items]
+      summary: Видалити товар
+      operationId: deleteItem
+      responses:
+        '204':
+          description: Товар видалено; тіло відповіді відсутнє
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /health:
+    get:
+      tags: [Health]
+      summary: Перевірити доступність застосунку
+      operationId: getHealth
+      responses:
+        '200':
+          description: Сервер відповідає рядком ok
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+components:
+  responses:
+    ValidationError:
+      description: Дані товару не пройшли бізнес-валідацію в сервісі
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: ValidationError
+            code: ITEM_VALIDATION_FAILED
+            details:
+              - field: Name
+                message: Name is required.
+              - field: Price
+                message: Price must be greater than zero.
+    NotFoundError:
+      description: Товар із заданим ідентифікатором відсутній
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: NotFound
+            code: ITEM_NOT_FOUND
+            details:
+              - field: Id
+                message: Item with ID 999 was not found.
+  schemas:
+    CreateItemRequest:
+      type: object
+      description: Дані для створення товару
+      required: [name, category, price]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          description: Назва не може бути порожньою або складатися лише з пробілів
+          example: Table lamp
+        category:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          description: Категорія не може бути порожньою або складатися лише з пробілів
+          example: Lighting
+        price:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          description: Ціна має бути більшою за нуль
+          example: 699.9
+    UpdateItemRequest:
+      type: object
+      description: Дані для повного оновлення товару
+      required: [name, category, price]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          example: Modern table lamp
+        category:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          example: Lighting
+        price:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          example: 749
+    ItemResponse:
+      type: object
+      description: Товар у відповіді API
+      required: [id, name, category, price]
+      properties:
+        id:
+          type: integer
+          format: int32
+          example: 1
+        name:
+          type: string
+          example: Table lamp
+        category:
+          type: string
+          example: Lighting
+        price:
+          type: number
+          example: 699.9
+    ErrorDetail:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          description: Назва поля, як її повертає сервіс
+          example: Name
+        message:
+          type: string
+          example: Name is required.
+    ErrorResponse:
+      type: object
+      description: Формат бізнес-помилок, які повертає сервіс Items
+      required: [error, code, details]
+      properties:
+        error:
+          type: string
+          example: ValidationError
+        code:
+          type: string
+          example: ITEM_VALIDATION_FAILED
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
