@@ -8,7 +8,11 @@ public sealed record ItemResponse(int Id, string Name, string Category, decimal 
 
 public sealed record ErrorDetail(string Field, string Message);
 
-public sealed record ErrorResponse(string Error, string Code, IReadOnlyList<ErrorDetail> Details);
+public sealed record ErrorResponse(
+    string Error,
+    string Code,
+    IReadOnlyList<ErrorDetail> Details,
+    string RequestId = "");
 
 public sealed class ItemServiceResult<T>
 {

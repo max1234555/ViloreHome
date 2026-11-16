@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Web_prog_server.Middleware;
 using Web_prog_server.Services.Items;
 
 namespace Web_prog_server.Controllers
@@ -29,17 +31,24 @@ namespace Web_prog_server.Controllers
             var result = await _itemService.GetByIdAsync(id, cancellationToken);
             return result.IsSuccess
                 ? Ok(result.Value)
-                : NotFound(result.Error);
+                : NotFound(WithRequestId(result.Error!));
         }
 
         [HttpPost]
+        [EnableRateLimiting("item-write")]
         public async Task<ActionResult<ItemResponse>> CreateItem(
-            CreateItemRequest request, CancellationToken cancellationToken)
+            CreateItemRequest request,
+            [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+            CancellationToken cancellationToken)
         {
-            var result = await _itemService.CreateAsync(request, cancellationToken);
+            var result = await _itemService.CreateIdempotentAsync(
+                request, idempotencyKey, cancellationToken);
             if (!result.IsSuccess)
             {
-                return BadRequest(result.Error);
+                var error = WithRequestId(result.Error!);
+                return error.Code == "IDEMPOTENCY_KEY_REUSED"
+                    ? Conflict(error)
+                    : BadRequest(error);
             }
 
             return CreatedAtAction(nameof(GetItem), new { id = result.Value!.Id }, result.Value);
@@ -56,8 +65,8 @@ namespace Web_prog_server.Controllers
             }
 
             return result.Error!.Code == "ITEM_NOT_FOUND"
-                ? NotFound(result.Error)
-                : BadRequest(result.Error);
+                ? NotFound(WithRequestId(result.Error))
+                : BadRequest(WithRequestId(result.Error));
         }
 
         [HttpDelete("{id:int}")]
@@ -66,7 +75,10 @@ namespace Web_prog_server.Controllers
             var result = await _itemService.DeleteAsync(id, cancellationToken);
             return result.IsSuccess
                 ? NoContent()
-                : NotFound(result.Error);
+                : NotFound(WithRequestId(result.Error!));
         }
+
+        private ErrorResponse WithRequestId(ErrorResponse error) =>
+            error with { RequestId = HttpContext.RequestId() };
     }
 }
