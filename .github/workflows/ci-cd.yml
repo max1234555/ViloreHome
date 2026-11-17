@@ -20,13 +20,13 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore dependencies
-        run: dotnet restore Web-prog_server/Web-prog_server.csproj
+        run: dotnet restore Web-prog_server.sln
 
       - name: Build project
-        run: dotnet build Web-prog_server/Web-prog_server.csproj --no-restore --configuration Release
+        run: dotnet build Web-prog_server.sln --no-restore --configuration Release
 
       - name: Run tests
-        run: dotnet test --no-build --configuration Release
+        run: dotnet test Web-prog_server.sln --no-build --configuration Release
 
   publish-docker:
     needs: build-and-test
