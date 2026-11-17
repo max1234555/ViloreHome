@@ -1,6 +1,34 @@
 # ViloreHome
 
+[![Backend CI/CD](https://github.com/max1234555/ViloreHome/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/max1234555/ViloreHome/actions/workflows/ci-cd.yml)
+
 Навчальний проєкт каталогу товарів для дому. Бекенд побудований на ASP.NET Core, EF Core та SQLite; фронтенд — на React.
+
+## Локальний запуск
+
+Потрібні .NET 8 SDK, Node.js і Docker Desktop.
+
+Запуск API з кореня репозиторію:
+
+```powershell
+dotnet restore Web-prog_server/Web-prog_server.sln
+dotnet run --project Web-prog_server/Web-prog_server.csproj
+```
+
+API доступний через адресу з [launchSettings.json](Web-prog_server/Properties/launchSettings.json). Перевірка працездатності:
+
+```powershell
+curl.exe -i https://localhost:7060/health
+```
+
+Запуск фронтенду в окремому терміналі:
+
+```powershell
+npm --prefix frontend ci
+npm --prefix frontend run dev
+```
+
+Vite-фронтенд доступний за адресою `http://localhost:5173`.
 
 ## Запуск у Docker
 
@@ -82,6 +110,33 @@ docker rmi vilorehome-api:1.0.0
 ```
 
 Файли [Dockerfile](Dockerfile) і [.dockerignore](.dockerignore) належать контейнеризації серверного застосунку.
+
+## Delivery через GHCR
+
+GitHub Actions у [.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml) автоматично restore, build і test серверного проєкту. Після успішної перевірки образ API збирається та публікується в GitHub Container Registry.
+
+Основний образ:
+
+```text
+ghcr.io/max1234555/vilorehome-backend:latest
+```
+
+Для конкретного коміту workflow також публікує тег:
+
+```text
+ghcr.io/max1234555/vilorehome-backend:<commit-sha>
+```
+
+Запуск опублікованого образу:
+
+```powershell
+docker pull ghcr.io/max1234555/vilorehome-backend:latest
+docker run --name vilorehome-api --rm -d -p 8080:8080 ghcr.io/max1234555/vilorehome-backend:latest
+curl.exe -i http://localhost:8080/health
+docker stop vilorehome-api
+```
+
+Якщо пакет GHCR має приватний доступ, перед `docker pull` потрібно увійти в реєстр за допомогою GitHub Personal Access Token із правом `read:packages`.
 
 ## API документація
 
