@@ -1,8 +1,12 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using Xunit;
 using Web_prog_server.Data;
+using Web_prog_server.Middleware;
 using Web_prog_server.Services.Items;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Web_prog_server.Tests.Services.Items;
 
@@ -43,6 +47,66 @@ public sealed class ItemServiceTests
     }
 
     [Fact]
+    public async Task CreateIdempotentAsync_RepeatedKey_ReturnsSameItemWithoutDuplicate()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var request = new CreateItemRequest("Lamp", "Lighting", 50m);
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => database.Service.CreateIdempotentAsync(request, "same-key")));
+
+        Assert.All(results, result => Assert.True(result.IsSuccess));
+        Assert.All(results, result => Assert.Equal(results[0].Value!.Id, result.Value!.Id));
+        Assert.Single(await database.Context.Items.ToListAsync());
+    }
+
+    [Fact]
+    public async Task CreateIdempotentAsync_ReusedKeyWithDifferentPayload_ReturnsConflict()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+
+        await database.Service.CreateIdempotentAsync(
+            new CreateItemRequest("Lamp", "Lighting", 50m), "same-key");
+        var retry = await database.Service.CreateIdempotentAsync(
+            new CreateItemRequest("Chair", "Furniture", 75m), "same-key");
+
+        Assert.False(retry.IsSuccess);
+        Assert.Equal("IDEMPOTENCY_KEY_REUSED", retry.Error!.Code);
+        Assert.Single(await database.Context.Items.ToListAsync());
+    }
+
+    [Fact]
+    public async Task RequestId_IsReturnedInHeaderAndStandardErrorBody()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Headers[RequestIdMiddleware.HeaderName] = "test-request-123";
+        context.Response.Body = new MemoryStream();
+        var exceptionMiddleware = new ApiExceptionMiddleware(
+            httpContext =>
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+                return Task.CompletedTask;
+            },
+            NullLogger<ApiExceptionMiddleware>.Instance);
+        var requestIdMiddleware = new RequestIdMiddleware(exceptionMiddleware.InvokeAsync);
+
+        await requestIdMiddleware.InvokeAsync(context);
+
+        Assert.Equal("test-request-123",
+            context.Response.Headers[RequestIdMiddleware.HeaderName].ToString());
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+
+        context.Response.Body.Position = 0;
+        var error = await JsonSerializer.DeserializeAsync<ErrorResponse>(
+            context.Response.Body,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(error);
+        Assert.Equal("test-request-123", error.RequestId);
+        Assert.Equal("RESOURCE_NOT_FOUND", error.Code);
+    }
+
+    [Fact]
     public async Task CrudOperations_CreateReadUpdateAndDeleteItem()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -74,7 +138,7 @@ public sealed class ItemServiceTests
         {
             _connection = connection;
             Context = context;
-            Service = new ItemService(context);
+            Service = new ItemService(context, new ItemIdempotencyStore());
         }
 
         public AppDbContext Context { get; }
@@ -101,3 +165,5 @@ public sealed class ItemServiceTests
         }
     }
 }
+
+
