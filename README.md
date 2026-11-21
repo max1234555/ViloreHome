@@ -151,3 +151,8 @@ docker stop vilorehome-api
 - [ADR 0001 — архітектурний стиль](docs/adr/0001-architecture-style.md)
 - [ADR 0002 — шарова архітектура](docs/adr/0002-layered-architecture.md)
 - [ADR 0003 — REST API та модель помилок](docs/adr/0003-api-style-and-error-model.md)
+
+
+## Схема Kubernetes-додатку:
+
+![Схему Kubernetes-додатку](docs/kubernetes/scheme_Kubernetes-app.png)
